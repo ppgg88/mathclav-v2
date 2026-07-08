@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>clavier.png</file>
+        <file>clavier_dark.png</file>
+        <file>raptor.jpg</file>
+    </qresource>
+</RCC>
