@@ -12,7 +12,18 @@ jobs:
         include:
           - os: ubuntu-latest
             preset: ci-linux
-          - os: windows-latest
+          # Pinned rather than windows-latest: that label silently moved
+          # to a Visual Studio 2026 image in June 2026, breaking every
+          # build here because CMakePresets.json's ci-windows preset
+          # (inherited from dev-windows) hardcodes generator "Visual
+          # Studio 17 2022" -- a generator string is inherently tied to a
+          # specific VS version in CMake, there's no "whatever's newest"
+          # option, so tracking "latest" here just means silently
+          # breaking again on the next such migration. dev-windows stays
+          # VS2022-pinned too since that's what a local dev machine is
+          # actually likely to have installed; bump both together,
+          # deliberately, if/when moving to VS2026.
+          - os: windows-2022
             preset: ci-windows
     runs-on: ${{ matrix.os }}
 
@@ -48,8 +59,9 @@ jobs:
         # MicroTeX's MSVC path resolves tinyxml2 via `find_package(tinyxml2
         # CONFIG REQUIRED)`, i.e. a vcpkg-provided config package -- there
         # is no equivalent of Linux's system libtinyxml2-dev here. vcpkg
-        # itself is preinstalled on windows-latest runners at
-        # VCPKG_INSTALLATION_ROOT; the ci-windows preset points its
+        # itself is preinstalled on windows-2022 runners at
+        # VCPKG_INSTALLATION_ROOT (confirmed still true after pinning off
+        # windows-latest above); the ci-windows preset points its
         # toolchainFile there (CMakePresets.json).
         run: vcpkg install tinyxml2:x64-windows
 
@@ -101,7 +113,9 @@ jobs:
   package-windows:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
-    runs-on: windows-latest
+    # Pinned for the same reason as the build matrix above: this job also
+    # configures with the VS2022-generator ci-windows preset.
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
 
