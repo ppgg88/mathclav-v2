@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MathClav
+Comment=Editeur de formules mathematiques au clavier (AZERTY)
+Exec=mathclav
+Icon=mathclav
+Categories=Education;Science;Math;
+Terminal=false
