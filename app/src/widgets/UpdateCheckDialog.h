@@ -11,11 +11,13 @@ class QNetworkReply;
 // plain requests.get and runs it via `os.system(...)` with no signature
 // or checksum verification -- a silent-arbitrary-code-execution path
 // triggered automatically on every startup (update_q(), called from
-// index.py's own __init__). This class only ever fetches a small JSON
-// file, compares a version string, and -- if a newer one exists -- shows
-// a dialog whose only action is opening the releases page in the user's
-// browser (QDesktopServices::openUrl). Nothing is ever downloaded or
-// executed automatically.
+// index.py's own __init__). This class only ever fetches GitHub's own
+// "latest release" API for this repo, compares its tag against the local
+// version numerically (major.minor.patch, not string inequality -- see
+// UpdateCheckDialog.cpp), and -- if the remote one is actually newer --
+// shows a dialog whose only action is opening the releases page in the
+// user's browser (QDesktopServices::openUrl). Nothing is ever downloaded
+// or executed automatically.
 class UpdateCheckDialog : public QObject {
     Q_OBJECT
 

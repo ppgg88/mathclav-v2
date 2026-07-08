@@ -3,8 +3,19 @@
 # with no display server.
 find_package(Qt6 REQUIRED COMPONENTS Core)
 
+# Generated from the top-level project(MathClav VERSION ...) call so the
+# version string has exactly one source of truth -- previously
+# core/src/Version.cpp hardcoded its own literal copy, independent of both
+# CMakeLists.txt's version and packaging/windows/mathclav.nsi's, with no
+# way to notice the three drifting apart.
+configure_file(
+    src/Version.cpp.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp
+    @ONLY
+)
+
 add_library(mathclav_core STATIC
-    src/Version.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/Version.cpp
     src/ast/Node.cpp
     src/ast/NodeCatalog.cpp
     src/cursor/CursorPath.cpp

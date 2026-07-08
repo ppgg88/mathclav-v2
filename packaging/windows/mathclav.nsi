@@ -14,8 +14,13 @@
 !ifndef STAGING_DIR
   !error "Pass the staged install directory: makensis /DSTAGING_DIR=<path> mathclav.nsi"
 !endif
+; CI always passes the real version explicitly (derived from the pushed
+; git tag -- see .github/workflows/ci.yml's package-windows job), so this
+; default only matters for a manual/local `makensis` invocation. Not a
+; second source of truth to keep in sync with CMakeLists.txt's
+; project(VERSION ...) -- see core/src/Version.cpp.in for that one.
 !ifndef APP_VERSION
-  !define APP_VERSION "2.0.0"
+  !define APP_VERSION "0.0.0-dev"
 !endif
 
 !include "MUI2.nsh"

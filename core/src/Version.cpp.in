@@ -3,7 +3,7 @@
 namespace mathclav::core {
 
 std::string_view version() noexcept {
-    return "2.0.0";
+    return "@PROJECT_VERSION@";
 }
 
 } // namespace mathclav::core
