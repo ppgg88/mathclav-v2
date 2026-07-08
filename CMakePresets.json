@@ -1,0 +1,70 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "dev-linux",
+      "inherits": "base",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "ci-linux",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "dev-windows",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "ci-windows",
+      "inherits": "dev-windows",
+      "toolchainFile": "$env{VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake"
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev-linux", "configurePreset": "dev-linux" },
+    { "name": "ci-linux", "configurePreset": "ci-linux" },
+    { "name": "dev-windows", "configurePreset": "dev-windows", "configuration": "Debug" },
+    { "name": "ci-windows", "configurePreset": "ci-windows", "configuration": "RelWithDebInfo" }
+  ],
+  "testPresets": [
+    {
+      "name": "ci-linux",
+      "configurePreset": "ci-linux",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "configuration": "RelWithDebInfo",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+build/
+CMakeUserPresets.json
+.cache/
+compile_commands.json
+*.o
+*.obj
+*.dir/
+dist/
+packaging/linux/.tools/

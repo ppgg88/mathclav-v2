@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: ci-linux
+          - os: windows-latest
+            preset: ci-windows
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.*"
+          modules: "qtcharts"
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        # ninja-build: CMake generator used by the ci-linux/ci-windows
+        # presets. libtinyxml2-dev + pkg-config: MicroTeX's CMakeLists.txt
+        # resolves tinyxml2 via `pkg_check_modules` on non-MSVC platforms
+        # (cmake/FetchMicroTeX.cmake pulls MicroTeX in as a submodule of
+        # this build, so its dependency has to be satisfied here too).
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config
+
+      - name: Install tinyxml2 (vcpkg)
+        if: runner.os == 'Windows'
+        # MicroTeX's MSVC path resolves tinyxml2 via `find_package(tinyxml2
+        # CONFIG REQUIRED)`, i.e. a vcpkg-provided config package -- there
+        # is no equivalent of Linux's system libtinyxml2-dev here. vcpkg
+        # itself is preinstalled on windows-latest runners at
+        # VCPKG_INSTALLATION_ROOT; the ci-windows preset points its
+        # toolchainFile there (CMakePresets.json).
+        run: vcpkg install tinyxml2:x64-windows
+
+      - name: Configure
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }}
+
+  # Everything below only runs for a `vX.Y.Z` tag push (plan doc's Phase 7
+  # "done when": a tagged run produces an installable .exe and a runnable
+  # .AppImage). Unverified beyond the ci-linux path, which was exercised
+  # locally with the exact same preset/commands (see the plan doc's Phase 7
+  # notes) -- the Windows packaging steps here were never run on a real
+  # Windows machine.
+  package-linux:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.*"
+          modules: "qtcharts"
+
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config fuse libfuse2
+
+      - name: Configure
+        run: cmake --preset ci-linux
+
+      - name: Build
+        run: cmake --build --preset ci-linux
+
+      - name: Build AppImage
+        run: packaging/linux/build-appimage.sh build/ci-linux dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/*.AppImage
+
+  package-windows:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.*"
+          modules: "qtcharts"
+
+      - name: Install tinyxml2 (vcpkg)
+        run: vcpkg install tinyxml2:x64-windows
+
+      - name: Configure
+        run: cmake --preset ci-windows
+
+      - name: Build
+        run: cmake --build --preset ci-windows --config RelWithDebInfo
+
+      - name: Install NSIS
+        run: choco install nsis -y
+
+      - name: Build installer
+        working-directory: packaging/windows
+        # No separate `cmake --install` staging step: app/CMakeLists.txt's
+        # POST_BUILD steps already deposit MathClav.exe + MicroTeX's res/ +
+        # (via windeployqt) every Qt DLL/plugin side by side in the build
+        # tree, exactly what the installer needs -- `cmake --install` would
+        # only copy the files covered by an install() rule, missing the
+        # windeployqt-added DLLs entirely. ci-windows uses a multi-config
+        # (Visual Studio) generator, so the actual output directory is
+        # config-named, not just app/.
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          $staging = "$env:GITHUB_WORKSPACE\build\ci-windows\app\RelWithDebInfo"
+          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DSTAGING_DIR=$staging" "/DAPP_VERSION=$version" mathclav.nsi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: packaging/windows/MathClav-*-Setup.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [package-linux, package-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/linux-appimage/*.AppImage
+            artifacts/windows-installer/*.exe
