@@ -32,7 +32,16 @@ jobs:
         # resolves tinyxml2 via `pkg_check_modules` on non-MSVC platforms
         # (cmake/FetchMicroTeX.cmake pulls MicroTeX in as a submodule of
         # this build, so its dependency has to be satisfied here too).
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config
+        # libcups2-dev: MicroTeX's Qt backend requires the Qt6PrintSupport
+        # component, which on Linux requires CUPS to be found at configure
+        # time -- install-qt-action's binary Qt distribution doesn't bundle
+        # it (unlike apt's qt6-base-dev, which pulls it in transitively, so
+        # this was never reproduced on a dev machine that already had the
+        # apt package installed). Confirmed by installing the exact CI Qt
+        # version (6.7.3) locally via aqtinstall and reproducing "Qt6
+        # component PrintSupport ... could not be found because dependency
+        # Cups could not be found" verbatim.
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config libcups2-dev
 
       - name: Install tinyxml2 (vcpkg)
         if: runner.os == 'Windows'
