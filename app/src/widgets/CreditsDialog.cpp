@@ -15,14 +15,27 @@ CreditsDialog::CreditsDialog(QWidget* parent)
 
     auto* outer = new QVBoxLayout(this);
 
+    // Rich text rather than the plain "\n" block this started as, so the
+    // contributor handles are actual clickable links instead of URLs the
+    // reader has to retype. Note the escaped "&amp;": under Qt::RichText a
+    // bare "&" in "SchnakyX & apparentés" would be parsed as the start of
+    // an entity and silently swallow what follows.
     const QString text =
-        QStringLiteral("MathClav v%1\nPar : Team SchnakyX & apparentés (TS&a)\n\n"
-                        "Licence (CC BY-NC-SA 4.0) 2022 - MathClav\n"
-                        "This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0\n\n"
+        QStringLiteral("MathClav v%1<br>Par : Team SchnakyX &amp; apparentés (TS&amp;a)<br><br>"
+                        "Contributeurs :<br>"
+                        "<a href=\"https://github.com/ppgg88\">ppgg88</a> &middot; "
+                        "<a href=\"https://github.com/zatomos\">zatomos</a><br><br>"
+                        "Licence : <a href=\"https://www.gnu.org/licenses/gpl-3.0.html\">GNU GPL v3</a> - 2022 MathClav<br>"
+                        "This program is free software: you can redistribute it and/or modify it under the "
+                        "terms of the GNU General Public License, version 3.<br>"
+                        "It comes with ABSOLUTELY NO WARRANTY.<br><br>"
                         "Nous contacter : paul.giroux87@gmail.com")
             .arg(QString::fromUtf8(mathclav::core::version().data()));
     auto* label = new QLabel(text, this);
+    label->setTextFormat(Qt::RichText);
     label->setAlignment(Qt::AlignCenter);
+    // Hands the href to QDesktopServices, matching what the buttons below do.
+    label->setOpenExternalLinks(true);
     outer->addWidget(label);
 
     auto* buttons = new QHBoxLayout();

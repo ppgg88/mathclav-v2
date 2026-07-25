@@ -42,6 +42,19 @@ The `mathclav` executable is produced under `build/dev-linux/app/`.
 - History of saved expressions, light/dark theme, session autosave.
 - Packaged for both Linux (AppImage) and Windows (NSIS installer).
 
+## Licence
+
+[GNU GPL v3](LICENSE). MathClav est un logiciel libre : vous pouvez le
+redistribuer et/ou le modifier selon les termes de cette licence. Il est fourni
+sans aucune garantie.
+
+## Contributeurs
+
+- [ppgg88](https://github.com/ppgg88)
+- [zatomos](https://github.com/zatomos)
+
+Les mêmes crédits sont accessibles depuis l'application, via <kbd>F9</kbd>.
+
 ## Status
 
 Feature-complete: core expression tree/cursor engine, live rendering, all
