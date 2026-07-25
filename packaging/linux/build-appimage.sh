@@ -7,6 +7,11 @@
 #
 # Usage: packaging/linux/build-appimage.sh <build-dir> [output-dir]
 #   e.g. packaging/linux/build-appimage.sh build/ci-linux dist
+#
+# Set VERSION to have linuxdeploy name the output
+# MathClav-<VERSION>-x86_64.AppImage; unset, every build (and so every
+# release asset) is called MathClav-x86_64.AppImage, indistinguishable once
+# downloaded.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

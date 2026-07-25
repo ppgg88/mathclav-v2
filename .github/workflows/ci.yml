@@ -80,9 +80,40 @@ jobs:
   # locally with the exact same preset/commands (see the plan doc's Phase 7
   # notes) -- the Windows packaging steps here were never run on a real
   # Windows machine.
-  package-linux:
+  # The tag is what the in-app update check compares against: it reads this
+  # repo's /releases/latest and diffs `tag_name` numerically against the
+  # binary's own mathclav::core::version(), which is generated from
+  # project(MathClav VERSION ...) -- not from the tag. Tagging v2.1.0
+  # without bumping CMakeLists.txt therefore ships a 2.0.0 binary under a
+  # 2.1.0 release, and every user's update check fires forever, offering an
+  # update they already have. The Windows installer takes its version from
+  # the tag too (mathclav.nsi's APP_VERSION), so the same drift also
+  # mislabels the installer. Fail the tagged run before anything is
+  # published rather than after.
+  verify-version:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match project(MathClav VERSION ...)
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          cmake_version="$(sed -n 's/^project(MathClav VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+          echo "tag=$tag_version cmake=$cmake_version"
+          if [ -z "$cmake_version" ]; then
+            echo "::error::could not parse the version out of CMakeLists.txt"
+            exit 1
+          fi
+          if [ "$tag_version" != "$cmake_version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match project(MathClav VERSION $cmake_version) -- bump CMakeLists.txt and retag"
+            exit 1
+          fi
+
+  package-linux:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,7 +134,14 @@ jobs:
         run: cmake --build --preset ci-linux
 
       - name: Build AppImage
-        run: packaging/linux/build-appimage.sh build/ci-linux dist
+        # VERSION is read by linuxdeploy to version-suffix the filename, so
+        # the release asset is MathClav-2.0.0-x86_64.AppImage rather than a
+        # every-release-identical MathClav-x86_64.AppImage.
+        # The "v" is stripped to match the installer, which versions itself
+        # from the same tag via mathclav.nsi's APP_VERSION.
+        run: |
+          export VERSION="${GITHUB_REF_NAME#v}"
+          packaging/linux/build-appimage.sh build/ci-linux dist
 
       - uses: actions/upload-artifact@v4
         with:
@@ -112,7 +150,7 @@ jobs:
 
   package-windows:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: verify-version
     # Pinned for the same reason as the build matrix above: this job also
     # configures with the VS2022-generator ci-windows preset.
     runs-on: windows-2022
@@ -161,6 +199,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [package-linux, package-windows]
     runs-on: ubuntu-latest
+    # Creating the release is a write to repository contents, and the
+    # default GITHUB_TOKEN is read-only on repos created since Feb 2023 --
+    # without this the job fails at the publish step with a 403, after both
+    # packaging jobs have already succeeded.
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -168,6 +212,12 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          # The in-app update check only reads `tag_name`, but /releases/latest
+          # skips drafts and prereleases -- so a release published here must be
+          # a real one for the check to ever see it.
+          draft: false
+          prerelease: false
+          generate_release_notes: true
           files: |
             artifacts/linux-appimage/*.AppImage
             artifacts/windows-installer/*.exe
