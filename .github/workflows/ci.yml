@@ -35,6 +35,16 @@ jobs:
         with:
           version: "6.7.*"
           modules: "qtcharts"
+          # aqtinstall pulls ~10 archives straight off the Qt mirror network
+          # on every job. When download.qt.io is unreachable it falls back to
+          # community mirrors, and those fail in ways nothing here controls --
+          # a packaging run died on ftp2.nluug.nl serving a certificate not
+          # valid for its own hostname, halfway through, after four other
+          # archives had already installed. Caching means only the first job
+          # on a given Qt version/module set touches the network at all; the
+          # rest, including the packaging jobs that run after `build` in the
+          # same tagged run, restore from the cache it populated.
+          cache: true
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
@@ -150,6 +160,16 @@ jobs:
         with:
           version: "6.7.*"
           modules: "qtcharts"
+          # aqtinstall pulls ~10 archives straight off the Qt mirror network
+          # on every job. When download.qt.io is unreachable it falls back to
+          # community mirrors, and those fail in ways nothing here controls --
+          # a packaging run died on ftp2.nluug.nl serving a certificate not
+          # valid for its own hostname, halfway through, after four other
+          # archives had already installed. Caching means only the first job
+          # on a given Qt version/module set touches the network at all; the
+          # rest, including the packaging jobs that run after `build` in the
+          # same tagged run, restore from the cache it populated.
+          cache: true
 
       - name: Install Linux build dependencies
         run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config fuse libfuse2
@@ -189,6 +209,16 @@ jobs:
         with:
           version: "6.7.*"
           modules: "qtcharts"
+          # aqtinstall pulls ~10 archives straight off the Qt mirror network
+          # on every job. When download.qt.io is unreachable it falls back to
+          # community mirrors, and those fail in ways nothing here controls --
+          # a packaging run died on ftp2.nluug.nl serving a certificate not
+          # valid for its own hostname, halfway through, after four other
+          # archives had already installed. Caching means only the first job
+          # on a given Qt version/module set touches the network at all; the
+          # rest, including the packaging jobs that run after `build` in the
+          # same tagged run, restore from the cache it populated.
+          cache: true
 
       - name: Install tinyxml2 (vcpkg)
         run: vcpkg install tinyxml2:x64-windows
