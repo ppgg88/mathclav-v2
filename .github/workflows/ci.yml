@@ -4,6 +4,29 @@ on:
   push:
   pull_request:
 
+# Every Linux job configures the same CMake project and so needs the same
+# packages. They used to be spelled out per job, and drifted: libcups2-dev
+# was added to `build` when it broke there, but not to package-linux, which
+# then failed the identical `cmake --preset ci-linux` on the identical
+# missing Qt6PrintSupport dependency -- except only on tag pushes, the one
+# path nothing exercises routinely. One list, referenced by both.
+#
+# ninja-build: CMake generator used by the ci-linux/ci-windows presets.
+# libtinyxml2-dev + pkg-config: MicroTeX's CMakeLists.txt resolves tinyxml2
+# via `pkg_check_modules` on non-MSVC platforms (cmake/FetchMicroTeX.cmake
+# pulls MicroTeX in as a submodule of this build, so its dependency has to
+# be satisfied here too). libcups2-dev: MicroTeX's Qt backend requires the
+# Qt6PrintSupport component, which on Linux requires CUPS to be found at
+# configure time -- install-qt-action's binary Qt distribution doesn't
+# bundle it (unlike apt's qt6-base-dev, which pulls it in transitively, so
+# this was never reproduced on a dev machine that already had the apt
+# package installed). Confirmed by installing the exact CI Qt version
+# (6.7.3) locally via aqtinstall and reproducing "Qt6 component
+# PrintSupport ... could not be found because dependency Cups could not be
+# found" verbatim.
+env:
+  LINUX_BUILD_DEPS: ninja-build libtinyxml2-dev pkg-config libcups2-dev
+
 jobs:
   build:
     strategy:
@@ -48,21 +71,9 @@ jobs:
 
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
-        # ninja-build: CMake generator used by the ci-linux/ci-windows
-        # presets. libtinyxml2-dev + pkg-config: MicroTeX's CMakeLists.txt
-        # resolves tinyxml2 via `pkg_check_modules` on non-MSVC platforms
-        # (cmake/FetchMicroTeX.cmake pulls MicroTeX in as a submodule of
-        # this build, so its dependency has to be satisfied here too).
-        # libcups2-dev: MicroTeX's Qt backend requires the Qt6PrintSupport
-        # component, which on Linux requires CUPS to be found at configure
-        # time -- install-qt-action's binary Qt distribution doesn't bundle
-        # it (unlike apt's qt6-base-dev, which pulls it in transitively, so
-        # this was never reproduced on a dev machine that already had the
-        # apt package installed). Confirmed by installing the exact CI Qt
-        # version (6.7.3) locally via aqtinstall and reproducing "Qt6
-        # component PrintSupport ... could not be found because dependency
-        # Cups could not be found" verbatim.
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config libcups2-dev
+        # See LINUX_BUILD_DEPS at the top of this file for what each package
+        # is for.
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_BUILD_DEPS
 
       - name: Install tinyxml2 (vcpkg)
         if: runner.os == 'Windows'
@@ -172,7 +183,10 @@ jobs:
           cache: true
 
       - name: Install Linux build dependencies
-        run: sudo apt-get update && sudo apt-get install -y ninja-build libtinyxml2-dev pkg-config fuse libfuse2
+        # fuse + libfuse2 on top of the shared list: linuxdeploy and the
+        # AppImage it produces are themselves FUSE-mounted, which only this
+        # job does.
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_BUILD_DEPS fuse libfuse2
 
       - name: Configure
         run: cmake --preset ci-linux
@@ -229,6 +243,31 @@ jobs:
       - name: Build
         run: cmake --build --preset ci-windows --config RelWithDebInfo
 
+      # app/CMakeLists.txt only warns when it can't find windeployqt, so a
+      # build that never deployed the Qt runtime still succeeds, NSIS still
+      # produces an installer, and the breakage surfaces as "MathClav.exe
+      # won't start" on the machine of whoever downloads the release. Same
+      # for MicroTeX's res/, without which rendering fails at runtime.
+      # Neither is visible in a green build log, so assert the staged tree
+      # is complete while a failure still costs nothing.
+      - name: Verify the staged tree
+        run: |
+          $staging = "$env:GITHUB_WORKSPACE\build\ci-windows\app\RelWithDebInfo"
+          # qwindows.dll is the Qt platform plugin: without it the app aborts
+          # at startup with "could not find or load the Qt platform plugin".
+          $required = @(
+            "MathClav.exe", "Qt6Core.dll", "Qt6Gui.dll", "Qt6Widgets.dll",
+            "Qt6Charts.dll", "Qt6Network.dll", "platforms\qwindows.dll", "res"
+          )
+          $missing = $required | Where-Object { -not (Test-Path (Join-Path $staging $_)) }
+          if ($missing) {
+            Write-Output "::error::staged tree is incomplete, missing: $($missing -join ', ')"
+            Write-Output "contents of ${staging}:"
+            Get-ChildItem $staging -Name
+            exit 1
+          }
+          Write-Output "staged tree complete"
+
       - name: Install NSIS
         run: choco install nsis -y
 
@@ -243,9 +282,19 @@ jobs:
         # (Visual Studio) generator, so the actual output directory is
         # config-named, not just app/.
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
+          $version = "$env:GITHUB_REF_NAME" -replace '^v', ''
           $staging = "$env:GITHUB_WORKSPACE\build\ci-windows\app\RelWithDebInfo"
-          & "C:\Program Files (x86)\NSIS\makensis.exe" "/DSTAGING_DIR=$staging" "/DAPP_VERSION=$version" mathclav.nsi
+          # Chocolatey doesn't reliably put makensis on PATH for the current
+          # session, so fall back to its install location rather than assume
+          # either one works.
+          $makensis = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          if (-not $makensis) { $makensis = "C:\Program Files (x86)\NSIS\makensis.exe" }
+          if (-not (Test-Path $makensis)) {
+            Write-Output "::error::makensis not found (looked on PATH and at $makensis)"
+            exit 1
+          }
+          & $makensis "/DSTAGING_DIR=$staging" "/DAPP_VERSION=$version" mathclav.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v7
         with:

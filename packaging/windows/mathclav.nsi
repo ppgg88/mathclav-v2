@@ -49,7 +49,16 @@ Section "MathClav" SEC_MAIN
     SetOutPath "$INSTDIR"
     ; Everything windeployqt + `cmake --install` staged: MathClav.exe, Qt
     ; DLLs, platform/imageformats/etc. plugin subfolders, res/.
-    File /r "${STAGING_DIR}\*.*"
+    ;
+    ; "\*" rather than "\*.*": NSIS matches the latter literally, so a file
+    ; with no dot in its name is silently skipped. res/ has three --
+    ; RES_README plus greek/LICENSE and cyrillic/LICENSE, the license texts
+    ; of the bundled fonts -- so "*.*" would have shipped those fonts with
+    ; their licenses stripped, and reported nothing. Rendering itself would
+    ; still have worked, which is exactly why it would have gone unnoticed.
+    ; /x excludes the RelWithDebInfo build's debug symbols, tens of MB of no
+    ; use to an end user.
+    File /r /x "*.pdb" /x "*.ilk" "${STAGING_DIR}\*"
 
     WriteRegStr HKCU "Software\MathClav" "InstallDir" "$INSTDIR"
     WriteUninstaller "$INSTDIR\Uninstall.exe"
