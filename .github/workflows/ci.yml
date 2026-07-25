@@ -80,6 +80,7 @@ jobs:
   # locally with the exact same preset/commands (see the plan doc's Phase 7
   # notes) -- the Windows packaging steps here were never run on a real
   # Windows machine.
+
   # The tag is what the in-app update check compares against: it reads this
   # repo's /releases/latest and diffs `tag_name` numerically against the
   # binary's own mathclav::core::version(), which is generated from
@@ -90,25 +91,51 @@ jobs:
   # the tag too (mathclav.nsi's APP_VERSION), so the same drift also
   # mislabels the installer. Fail the tagged run before anything is
   # published rather than after.
+  #
+  # Deliberately gated on *any* tag, not just `refs/tags/v`: every job below
+  # keys off the `v` prefix, so pushing a tag named `2.0.0` used to skip the
+  # whole release half of this workflow silently -- a green run that
+  # published nothing, with no failure anywhere saying why. Matching all
+  # tags here turns that into a loud, explained failure.
   verify-version:
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.check.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v7
 
-      - name: Tag must match project(MathClav VERSION ...)
+      - name: Tag must be vX.Y.Z[-suffix] and match project(MathClav VERSION ...)
+        id: check
         run: |
+          if ! printf '%s' "$GITHUB_REF_NAME" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::tag $GITHUB_REF_NAME is not of the form vX.Y.Z or vX.Y.Z-suffix -- the packaging and release jobs all match on the leading 'v' and would be skipped, publishing nothing."
+            exit 1
+          fi
           tag_version="${GITHUB_REF_NAME#v}"
+          # Only the X.Y.Z core is compared: a prerelease deliberately ships
+          # the same source version as the release it leads up to, so
+          # v2.0.0-rc1 is expected to sit on project(... VERSION 2.0.0).
+          core_version="${tag_version%%-*}"
           cmake_version="$(sed -n 's/^project(MathClav VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
-          echo "tag=$tag_version cmake=$cmake_version"
+          echo "tag=$tag_version core=$core_version cmake=$cmake_version"
           if [ -z "$cmake_version" ]; then
             echo "::error::could not parse the version out of CMakeLists.txt"
             exit 1
           fi
-          if [ "$tag_version" != "$cmake_version" ]; then
+          if [ "$core_version" != "$cmake_version" ]; then
             echo "::error::tag $GITHUB_REF_NAME does not match project(MathClav VERSION $cmake_version) -- bump CMakeLists.txt and retag"
             exit 1
+          fi
+          # A suffix marks the release as a prerelease, which is what keeps it
+          # out of /releases/latest -- and so invisible to the in-app update
+          # check, which is the whole point of tagging one.
+          if [ "$core_version" != "$tag_version" ]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "$GITHUB_REF_NAME is a prerelease; it will NOT be offered by the in-app update check"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
   package-linux:
@@ -197,7 +224,10 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [package-linux, package-windows]
+    # verify-version is already an indirect dependency via the packaging
+    # jobs; it's named explicitly because a job can only read the outputs of
+    # jobs it lists in `needs`.
+    needs: [verify-version, package-linux, package-windows]
     runs-on: ubuntu-latest
     # Creating the release is a write to repository contents, and the
     # default GITHUB_TOKEN is read-only on repos created since Feb 2023 --
@@ -216,11 +246,13 @@ jobs:
 
       - uses: softprops/action-gh-release@v3
         with:
-          # The in-app update check only reads `tag_name`, but /releases/latest
-          # skips drafts and prereleases -- so a release published here must be
-          # a real one for the check to ever see it.
+          # Never a draft: the in-app update check reads /releases/latest,
+          # which skips drafts entirely. Prerelease tracks the tag's suffix
+          # (verify-version derives it), and /releases/latest skips those too
+          # -- so a vX.Y.Z-rc1 build is published and downloadable, but is not
+          # pushed at existing users, which is the point of tagging one.
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.verify-version.outputs.prerelease == 'true' }}
           generate_release_notes: true
           files: |
             artifacts/linux-appimage/*.AppImage
