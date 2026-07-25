@@ -28,7 +28,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -95,7 +95,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Tag must match project(MathClav VERSION ...)
         run: |
@@ -116,7 +116,7 @@ jobs:
     needs: verify-version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -143,7 +143,7 @@ jobs:
           export VERSION="${GITHUB_REF_NAME#v}"
           packaging/linux/build-appimage.sh build/ci-linux dist
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-appimage
           path: dist/*.AppImage
@@ -155,7 +155,7 @@ jobs:
     # configures with the VS2022-generator ci-windows preset.
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -190,7 +190,7 @@ jobs:
           $staging = "$env:GITHUB_WORKSPACE\build\ci-windows\app\RelWithDebInfo"
           & "C:\Program Files (x86)\NSIS\makensis.exe" "/DSTAGING_DIR=$staging" "/DAPP_VERSION=$version" mathclav.nsi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: packaging/windows/MathClav-*-Setup.exe
@@ -206,11 +206,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      # No `name`/`artifact-ids`: every artifact is downloaded, each into its
+      # own artifacts/<name>/ subdirectory, which is what the globs below
+      # expect. (v5's breaking path change only affected single downloads by
+      # ID, not this every-artifact form.)
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           # The in-app update check only reads `tag_name`, but /releases/latest
           # skips drafts and prereleases -- so a release published here must be
