@@ -66,7 +66,7 @@ TEST_CASE("SqrtN hints the index slot with a literal 'n' when empty, unlike othe
     REQUIRE(render(sqrtN) == L"\\sqrt[3]{8}");
 }
 
-TEST_CASE("Text renders empty as an empty \\text{}, not the ░ glyph", "[latex]") {
+TEST_CASE("Text renders empty as an empty \\text{}, not the empty-slot glyph", "[latex]") {
     // Ported from latex.py texte.__str__ (115-126): unlike every other
     // kind, an empty Text has no ░ placeholder at all.
     const Node text = Node::composite(Kind::Text);
